@@ -28,10 +28,10 @@ This repo contains python code to process data from FaunaLabs products.
 
 
 ## Progress
-[x] Basic Auditing and Visualization App
-[x] Physio Analysis Functions (cwt, wsst)
-[x] Basic Filtering Functions
-[] Edge Impulse Integration
-[] Cloud Storage/SQL Integration
-[] Dockerization
-[] Hosting
+- [x] Basic Auditing and Visualization App
+- [x] Physio Analysis Functions (cwt, wsst)
+- [x] Basic Filtering Functions
+- [] Edge Impulse Integration
+- [] Cloud Storage/SQL Integration
+- [] Dockerization
+- [] Hosting
