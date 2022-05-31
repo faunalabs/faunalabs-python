@@ -32,8 +32,6 @@ theme = {
 
 afe_colors = px.colors.qualitative.Pastel
 imu_colors = px.colors.qualitative.Bold
-#URL = 'mysql+pymysql://sam:whalesrule@35.236.203.47/data'
-#engine = sqlalchemy.create_engine(URL, pool_size=5,max_overflow=2,pool_timeout=30,pool_recycle=1800)
 
 app = dash.Dash(__name__, external_stylesheets=[external_stylesheets])
 
