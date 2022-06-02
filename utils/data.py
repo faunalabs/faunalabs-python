@@ -28,8 +28,8 @@ def amend_datafile():
     print('This is not yet developed')
     return
 
-def load(file,optics_freq=250):
-    column_names = ['LED2','LED3','LED1','AMB','A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth','temperature','M_x','M_y','M_z',
+def load(file,afe_freq=250):
+    column_names = ['AFE1','AFE2','AFE3','AFE4','A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth','temperature','M_x','M_y','M_z',
             'sample_time','voltage','current','power','charge_state','remaining_capacity']
     os.path.join(file)
 
@@ -38,29 +38,29 @@ def load(file,optics_freq=250):
     df.columns = column_names
     
     ## Seperate optics data 
-    optics_df = df[['LED1','LED2','LED3','AMB']].dropna()
-    optics_df['time'] = np.arange(0,len(optics_df)/optics_freq,1/optics_freq)
+    afe_df = df[['AFE1','AFE2','AFE3','AFE4']].dropna()
+    afe_df['time'] = np.arange(0,len(afe_df)/afe_freq,1/afe_freq)
 
     ## Seperate movement data
     sensor_df = df[['A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth']].dropna()
-    sensor_freq = len(sensor_df)/len(df)*optics_freq
+    sensor_freq = len(sensor_df)/len(df)*afe_freq
     sensor_df['time'] = np.arange(0,len(sensor_df)/sensor_freq,1/sensor_freq)
 
     ## Seperate magnetometer data 
     mag_df = df[['M_x','M_y','M_z']].dropna()
-    mag_freq = len(mag_df)/len(df)*optics_freq
+    mag_freq = len(mag_df)/len(df)*afe_freq
     mag_df['time'] = np.arange(0,len(mag_df)/mag_freq,1/mag_freq)
     #print(mag_freq)
 
     info_df = df[['voltage','current','power','charge_state','remaining_capacity']].dropna()
-    info_freq = len(info_df)/len(df)*optics_freq
+    info_freq = len(info_df)/len(df)*afe_freq
     info_df['time'] = np.arange(0,len(info_df)/info_freq,1/info_freq)
 
-    return optics_df, sensor_df, mag_df, info_df
+    return afe_df, sensor_df, mag_df, info_df
 
-def save(type,optics_df,sensor_df,mag_df,info_df,audit_df=[],deployment_df=[],location='local',combine = False):
+def save(type,afe_df,sensor_df,mag_df,info_df,audit_df=[],deployment_df=[],location='local',combine = False):
     if combine:
-        frames = [optics_df,sensor_df,mag_df,info_df,deployment_df,audit_df]
+        frames = [afe_df,sensor_df,mag_df,info_df,deployment_df,audit_df]
         df = pd.concat(frames,axis=1)
         if save:
             print('Select directory')
@@ -79,14 +79,14 @@ def save(type,optics_df,sensor_df,mag_df,info_df,audit_df=[],deployment_df=[],lo
         return df
     
     else:
-        return optics_df, sensor_df,mag_df,info_df,deployment_df,audit_df
+        return afe_df, sensor_df,mag_df,info_df,deployment_df,audit_df
     if storage == 'SQL':
         print('Uploading to SQL')
         deployment_df.to_sql('deployment_meta', con=engine, if_exists='append', index=False)
         query = 'SELECT * FROM deployment_meta order by deployment_id DESC limit 1'
         deployment_info = pd.read_sql(query,con=engine)
-        optics_df['deployment_id'] = deployment_info['deployment_id'][0]
-        optics_df.to_sql('optics_data', con=engine, if_exists='append', index=False)
+        afe_df['deployment_id'] = deployment_info['deployment_id'][0]
+        afe_df.to_sql('optics_data', con=engine, if_exists='append', index=False)
         sensor_df['deployment_id'] = deployment_info['deployment_id'][0]
         sensor_df.to_sql('sensor_data', con=engine, if_exists='append', index=False)
         mag_df['deployment_id'] = deployment_info['deployment_id'][0]
@@ -101,26 +101,26 @@ def save(type,optics_df,sensor_df,mag_df,info_df,audit_df=[],deployment_df=[],lo
         destination_folder_path = filedialog.askdirectory()
         
         if type == 'csv':
-            optics_df.to_csv(os.path.join(destination_folder_path,'{}_{}_optics.csv'.format(search['term'],search['search'])))
+            afe_df.to_csv(os.path.join(destination_folder_path,'{}_{}_optics.csv'.format(search['term'],search['search'])))
             sensor_df.to_csv(os.path.join(destination_folder_path,'{}_{}_sensor.csv'.format(search['term'],search['search'])))
             mag_df.to_csv(os.path.join(destination_folder_path,'{}_{}_mag.csv'.format(search['term'],search['search'])))
             info_df.to_csv(os.path.join(destination_folder_path,'{}_{}_info.csv'.format(search['term'],search['search'])))
             audit_df.to_csv(os.path.join(destination_folder_path,'{}_{}_info.csv'.format(search['term'],search['search'])))
         elif type == 'feather':
-            optics_df.to_feather(os.path.join(destination_folder_path,'{}_{}_optics.feather'.format(search['term'],search['search'])))
+            afe_df.to_feather(os.path.join(destination_folder_path,'{}_{}_optics.feather'.format(search['term'],search['search'])))
             sensor_df.to_feather(os.path.join(destination_folder_path,'{}_{}_sensor.feather'.format(search['term'],search['search'])))
             mag_df.to_feather(os.path.join(destination_folder_path,'{}_{}_mag.feather'.format(search['term'],search['search'])))
             info_df.to_feather(os.path.join(destination_folder_path,'{}_{}_info.feather'.format(search['term'],search['search'])))
             audit_df.to_feather(os.path.join(destination_folder_path,'{}_{}_info.feather'.format(search['term'],search['search'])))
         elif type == 'mat':
             import scipy.io as sio
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_optics.mat'.format(search['term'],search['search'])), {name: col.values for name, col in optics_df.items()})
+            sio.savemat(os.path.join(destination_folder_path,'{}_{}_optics.mat'.format(search['term'],search['search'])), {name: col.values for name, col in afe_df.items()})
             sio.savemat(os.path.join(destination_folder_path,'{}_{}_sensor.mat'.format(search['term'],search['search'])), {name: col.values for name, col in sensor_df.items()})
             sio.savemat(os.path.join(destination_folder_path,'{}_{}_mag.mat'.format(search['term'],search['search'])), {name: col.values for name, col in mag_df.items()})
             sio.savemat(os.path.join(destination_folder_path,'{}_{}_info.mat'.format(search['term'],search['search'])), {name: col.values for name, col in info_df.items()})
             sio.savemat(os.path.join(destination_folder_path,'{}_{}_audit.mat'.format(search['term'],search['search'])), {name: col.values for name, col in audit_df.items()})
         elif type == 'json':
-            optics_df.to_json(os.path.join(destination_folder_path,'{}_{}_optics.json'.format(search['term'],search['search'])))
+            afe_df.to_json(os.path.join(destination_folder_path,'{}_{}_optics.json'.format(search['term'],search['search'])))
             sensor_df.to_json(os.path.join(destination_folder_path,'{}_{}_sensor.json'.format(search['term'],search['search'])))
             mag_df.to_json(os.path.join(destination_folder_path,'{}_{}_mag.json'.format(search['term'],search['search'])))
             info_df.to_json(os.path.join(destination_folder_path,'{}_{}_info.json'.format(search['term'],search['search'])))
@@ -134,10 +134,10 @@ def transform_data(raw=True,storage='SQL',format='feather'):
     metadata,file = user_input('file')
     if metadata['audit'][0] == 'Yes':
         audit_path = filedialog.askopenfilename()
-    optics_freq = metadata['optics_freq'][0]
+    afe_freq = metadata['afe_freq'][0]
     root_name = os.path.splitext(file)[0]
 
-    optics_df,sensor_df,mag_df,info_df = parse_data(file,metadata['optics_freq'])
+    afe_df,sensor_df,mag_df,info_df = parse_data(file,metadata['afe_freq'])
 
     print(metadata)
     deployment_df = pd.DataFrame({'tag_id':[metadata['tag_id'][0]],
@@ -149,13 +149,13 @@ def transform_data(raw=True,storage='SQL',format='feather'):
                                     'sex':[metadata['sex'][0]],
                                     'animal_id':[metadata['animal_id'][0]],
                                     'life_stage':[metadata['life_stage'][0]],
-                                    'optics_freq':[optics_freq],
+                                    'afe_freq':[afe_freq],
                                     'sensor_freq':[sensor_freq],
                                     'mag_freq':[mag_freq],
                                     'info_freq':[info_freq],
                                     })
-    save(optics_df,sensor_df,mag_df,info_df,method='GCS')
-    return optics_df, sensor_df, mag_df, info_df
+    save(afe_df,sensor_df,mag_df,info_df,method='GCS')
+    return afe_df, sensor_df, mag_df, info_df
 
 def bulk_upload(raw=True,storage='SQL'):
     metadata,path = user_input('bulk_upload')
@@ -163,9 +163,9 @@ def bulk_upload(raw=True,storage='SQL'):
         for name in files:
             if str(name).endswith('.tsv'):
                 file = os.path.join(root, name)
-                optics_freq = metadata['optics_freq'][0]
+                afe_freq = metadata['afe_freq'][0]
                 root_name = os.path.splitext(file)[0]
-                column_names = ['LED2','LED3','LED1','AMB','A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth','temperature','M_x','M_y','M_z',
+                column_names = ['AFE1','AFE2','AFE3','AFE4','A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth','temperature','M_x','M_y','M_z',
                         'sample_time','voltage','current','power','charge_state','remaining_capacity']
                 os.path.join(file)
 
@@ -174,22 +174,22 @@ def bulk_upload(raw=True,storage='SQL'):
                 df.columns = column_names
 
                 ## Seperate optics data 
-                optics_df = df[['LED1','LED2','LED3','AMB']].dropna()
-                optics_df['time'] = np.arange(0,len(optics_df)/optics_freq,1/optics_freq)
+                afe_df = df[['AFE3','AFE1','AFE2','AFE4']].dropna()
+                afe_df['time'] = np.arange(0,len(afe_df)/afe_freq,1/afe_freq)
 
                 ## Seperate movement data
                 sensor_df = df[['A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth']].dropna()
-                sensor_freq = len(sensor_df)/len(df)*optics_freq
+                sensor_freq = len(sensor_df)/len(df)*afe_freq
                 sensor_df['time'] = np.arange(0,len(sensor_df)/sensor_freq,1/sensor_freq)
 
                 ## Seperate magnetometer data 
                 mag_df = df[['M_x','M_y','M_z']].dropna()
-                mag_freq = len(mag_df)/len(df)*optics_freq
+                mag_freq = len(mag_df)/len(df)*afe_freq
                 mag_df['time'] = np.arange(0,len(mag_df)/mag_freq,1/mag_freq)
                 #print(mag_freq)
 
                 info_df = df[['voltage','current','power','charge_state','remaining_capacity']].dropna()
-                info_freq = len(info_df)/len(df)*optics_freq
+                info_freq = len(info_df)/len(df)*afe_freq
                 info_df['time'] = np.arange(0,len(info_df)/info_freq,1/info_freq)
 
                 #print(metadata)
@@ -202,7 +202,7 @@ def bulk_upload(raw=True,storage='SQL'):
                                                 'sex':[metadata['sex'][0]],
                                                 'animal_id':[metadata['animal_id'][0]],
                                                 'life_stage':[metadata['life_stage'][0]],
-                                                'optics_freq':[optics_freq],
+                                                'afe_freq':[afe_freq],
                                                 'sensor_freq':[sensor_freq],
                                                 'mag_freq':[mag_freq],
                                                 'info_freq':[info_freq],
@@ -213,8 +213,8 @@ def bulk_upload(raw=True,storage='SQL'):
                 deployment_info = pd.read_sql(query,con=engine)
 
                 if storage == 'SQL':
-                    optics_df['deployment_id'] = deployment_info['deployment_id'][0]
-                    optics_df.to_sql('optics_data', con=engine, if_exists='append', index=False)
+                    afe_df['deployment_id'] = deployment_info['deployment_id'][0]
+                    afe_df.to_sql('optics_data', con=engine, if_exists='append', index=False)
                     sensor_df['deployment_id'] = deployment_info['deployment_id'][0]
                     sensor_df.to_sql('sensor_data', con=engine, if_exists='append', index=False)
                     mag_df['deployment_id'] = deployment_info['deployment_id'][0]
@@ -294,8 +294,8 @@ def download(user_input = True,common_freq=False,type='csv',save=True, search=''
             os.mkdir(save_directory)
         blob.download_to_filename(local_file)
         if extension =='.tsv' or '.csv':
-            optics_df,sensor_df,mag_df,info_df = parse_data(local_file,250)
+            afe_df,sensor_df,mag_df,info_df = parse_data(local_file,250)
         k = k + 1
     
-    return optics_df, sensor_df,mag_df,info_df,deployment_df,audit_df
+    return afe_df, sensor_df,mag_df,info_df,deployment_df,audit_df
     
