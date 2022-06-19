@@ -28,108 +28,84 @@ def amend_datafile():
     print('This is not yet developed')
     return
 
-def load(file,afe_freq=250):
+def resample(df,freq):
+    df['td'] = pd.to_timedelta(df['time']-df['time'][0],'sec')
+    df.set_index('td',inplace=True,drop=True)
+    df = df.resample(f'{int((1/freq)*1000)}ms').ffill()
+    df.index.floor(f'{int((1/freq)*1000)}ms')
+    return df
+
+def load(file,reload=False,afe_freq=250,decimate_freq=None,start=0,duration=None):
+    
     column_names = ['AFE1','AFE2','AFE3','AFE4','A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth','temperature','M_x','M_y','M_z',
             'sample_time','voltage','current','power','charge_state','remaining_capacity']
     os.path.join(file)
 
-    print('Parsing File')
-    df = pd.read_csv(file,header=None, engine='python').T
-    df.columns = column_names
-    
+    if reload == False:
+        print('Attempting reload existing data')
+        try:
+            df = pd.read_feather(f'{file.split(".")[0]}.feather')
+            print('Data reloaded')
+            return df
+        except Exception as e:
+            print('Reload Failed... Parsing CSV File')
+            df = pd.read_csv(file,header=None, engine='python').T
+            df.columns = column_names
+            print('Data Loaded')
+            save(df,file)
+    else:
+        print('Parsing CSV File')
+        df = pd.read_csv(file,header=None, engine='python').T
+        df.columns = column_names
+        print('Data Loaded')
+        save(df,file)
+            
     ## Seperate optics data 
     afe_df = df[['AFE1','AFE2','AFE3','AFE4']].dropna()
     afe_df['time'] = np.arange(0,len(afe_df)/afe_freq,1/afe_freq)
-
+    
+    start = start*60
+    if duration == None:
+        duration = afe_df.iloc[-1]['time']
+    else:
+        duration = duration*60
+    
+    afe_df = afe_df[(afe_df['time']>start) & (afe_df['time']<(start+duration))].reset_index(drop=True)
+    
     ## Seperate movement data
     sensor_df = df[['A_x','A_y','A_z','G_x','G_y','G_z','pitch','roll','heading','depth']].dropna()
+    sensor_df['obda'] = (sensor_df['A_x']*sensor_df['A_x'] + sensor_df['A_y']*sensor_df['A_y'] + sensor_df['A_z']*sensor_df['A_z'])
+    sensor_df['obda_diff'] = sensor_df['obda'].diff()
     sensor_freq = len(sensor_df)/len(df)*afe_freq
     sensor_df['time'] = np.arange(0,len(sensor_df)/sensor_freq,1/sensor_freq)
+    sensor_df = sensor_df[(sensor_df['time']>start) & (sensor_df['time']<(start+duration))].reset_index(drop=True)
 
     ## Seperate magnetometer data 
     mag_df = df[['M_x','M_y','M_z']].dropna()
     mag_freq = len(mag_df)/len(df)*afe_freq
     mag_df['time'] = np.arange(0,len(mag_df)/mag_freq,1/mag_freq)
+    mag_df = mag_df[(mag_df['time']>start) & (mag_df['time']<(start+duration))].reset_index(drop=True)
     #print(mag_freq)
 
     info_df = df[['voltage','current','power','charge_state','remaining_capacity']].dropna()
     info_freq = len(info_df)/len(df)*afe_freq
     info_df['time'] = np.arange(0,len(info_df)/info_freq,1/info_freq)
-
-    return afe_df, sensor_df, mag_df, info_df
-
-def save(type,afe_df,sensor_df,mag_df,info_df,audit_df=[],deployment_df=[],location='local',combine = False):
-    if combine:
-        frames = [afe_df,sensor_df,mag_df,info_df,deployment_df,audit_df]
-        df = pd.concat(frames,axis=1)
-        if save:
-            print('Select directory')
-            destination_folder_path = filedialog.askdirectory()
-            if type == 'csv':
-                df.to_csv(os.path.join(destination_folder_path,'{}_{}.csv'.format(search['term'],search['search'])))
-            elif type == 'feather':
-                df.to_feather(os.path.join(destination_folder_path,'{}_{}.feather'.format(search['term'],search['search'])))
-            elif type == 'mat':
-                import scipy.io as sio
-                sio.savemat(os.path.join(destination_folder_path,'{}_{}.mat'.format(search['term'],search['search'])), {name: col.values for name, col in df.items()})
-            elif type == 'json':
-                df.to_json(os.path.join(destination_folder_path,'{}_{}.json'.format(search['term'],search['search'])))
-            else:
-                print('File type not recognized')
-        return df
+    info_df = info_df[(info_df['time']>start) & (info_df['time']<(start+duration))].reset_index(drop=True)
     
+    if decimate_freq == None:
+        return afe_df, sensor_df, mag_df, info_df
     else:
-        return afe_df, sensor_df,mag_df,info_df,deployment_df,audit_df
-    if storage == 'SQL':
-        print('Uploading to SQL')
-        deployment_df.to_sql('deployment_meta', con=engine, if_exists='append', index=False)
-        query = 'SELECT * FROM deployment_meta order by deployment_id DESC limit 1'
-        deployment_info = pd.read_sql(query,con=engine)
-        afe_df['deployment_id'] = deployment_info['deployment_id'][0]
-        afe_df.to_sql('optics_data', con=engine, if_exists='append', index=False)
-        sensor_df['deployment_id'] = deployment_info['deployment_id'][0]
-        sensor_df.to_sql('sensor_data', con=engine, if_exists='append', index=False)
-        mag_df['deployment_id'] = deployment_info['deployment_id'][0]
-        mag_df.to_sql('mag_data', con=engine, if_exists='append', index=False)
-        info_df['deployment_id'] = deployment_info['deployment_id'][0]
-        info_df.to_sql('info_data', con=engine, if_exists='append', index=False)
-    elif storage == 'GCS':
-        print('Uploading to GCS')
-        
-    elif storage == 'local':
-        print('Select directory')
-        destination_folder_path = filedialog.askdirectory()
-        
-        if type == 'csv':
-            afe_df.to_csv(os.path.join(destination_folder_path,'{}_{}_optics.csv'.format(search['term'],search['search'])))
-            sensor_df.to_csv(os.path.join(destination_folder_path,'{}_{}_sensor.csv'.format(search['term'],search['search'])))
-            mag_df.to_csv(os.path.join(destination_folder_path,'{}_{}_mag.csv'.format(search['term'],search['search'])))
-            info_df.to_csv(os.path.join(destination_folder_path,'{}_{}_info.csv'.format(search['term'],search['search'])))
-            audit_df.to_csv(os.path.join(destination_folder_path,'{}_{}_info.csv'.format(search['term'],search['search'])))
-        elif type == 'feather':
-            afe_df.to_feather(os.path.join(destination_folder_path,'{}_{}_optics.feather'.format(search['term'],search['search'])))
-            sensor_df.to_feather(os.path.join(destination_folder_path,'{}_{}_sensor.feather'.format(search['term'],search['search'])))
-            mag_df.to_feather(os.path.join(destination_folder_path,'{}_{}_mag.feather'.format(search['term'],search['search'])))
-            info_df.to_feather(os.path.join(destination_folder_path,'{}_{}_info.feather'.format(search['term'],search['search'])))
-            audit_df.to_feather(os.path.join(destination_folder_path,'{}_{}_info.feather'.format(search['term'],search['search'])))
-        elif type == 'mat':
-            import scipy.io as sio
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_optics.mat'.format(search['term'],search['search'])), {name: col.values for name, col in afe_df.items()})
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_sensor.mat'.format(search['term'],search['search'])), {name: col.values for name, col in sensor_df.items()})
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_mag.mat'.format(search['term'],search['search'])), {name: col.values for name, col in mag_df.items()})
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_info.mat'.format(search['term'],search['search'])), {name: col.values for name, col in info_df.items()})
-            sio.savemat(os.path.join(destination_folder_path,'{}_{}_audit.mat'.format(search['term'],search['search'])), {name: col.values for name, col in audit_df.items()})
-        elif type == 'json':
-            afe_df.to_json(os.path.join(destination_folder_path,'{}_{}_optics.json'.format(search['term'],search['search'])))
-            sensor_df.to_json(os.path.join(destination_folder_path,'{}_{}_sensor.json'.format(search['term'],search['search'])))
-            mag_df.to_json(os.path.join(destination_folder_path,'{}_{}_mag.json'.format(search['term'],search['search'])))
-            info_df.to_json(os.path.join(destination_folder_path,'{}_{}_info.json'.format(search['term'],search['search'])))
-            audit_df.to_json(os.path.join(destination_folder_path,'{}_{}_audit.json'.format(search['term'],search['search'])))
-        else:
-            print('File type not recognized')
-        print('Saving locally')
-    print('Done!')
+        df = pd.concat([resample(afe_df,decimate_freq), resample(sensor_df,decimate_freq), resample(mag_df,decimate_freq),resample(info_df,decimate_freq)],axis=1)
+        df['time'] = np.arange(0,len(df)/decimate_freq,1/decimate_freq)
+        df = df.loc[:,~df.columns.duplicated()].copy()
+        return df
 
+def save(df,file,type='feather'):
+    if type == 'feather':
+        print('Saving feather')
+        df.to_feather(f'{file.split(".")[0]}.feather')
+    
+    
 def transform_data(raw=True,storage='SQL',format='feather'):
     metadata,file = user_input('file')
     if metadata['audit'][0] == 'Yes':
